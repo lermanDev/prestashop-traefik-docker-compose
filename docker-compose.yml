@@ -1,0 +1,71 @@
+version: '3.7'
+
+services:
+  traefik:
+    image: traefik:v2.4
+    command:
+      - "--log.level=DEBUG"
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
+      - "--certificatesresolvers.myresolver.acme.email=tudominio@tudominio.com" # Cambia esto por tu correo electrónico
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./letsencrypt:/letsencrypt"
+    networks:
+      - web
+
+  mysql:
+    image: mysql:5.7
+    command: --default-authentication-plugin=mysql_native_password
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword # Cambia esto por una contraseña segura
+      MYSQL_DATABASE: prestashop
+      MYSQL_USER: prestashopuser # Cambia esto si quieres
+      MYSQL_PASSWORD: prestashoppassword # Cambia esto por una contraseña segura
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - internal
+
+  prestashop:
+    image: prestashop/prestashop:latest
+    environment:
+      DB_SERVER: mysql
+      DB_NAME: prestashop
+      DB_USER: prestashopuser
+      DB_PASSWD: prestashoppassword
+      PS_DOMAIN: tudominio.com
+      #PS_SHOP_URL: https://tudominio.com
+      #PS_ENABLE_SSL: 1
+      PS_INSTALL_AUTO: 0
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.prestashop.rule=Host(`tudominio.com`)"
+      - "traefik.http.routers.prestashop.entrypoints=websecure"
+      - "traefik.http.routers.prestashop.tls.certresolver=myresolver"
+      - "traefik.docker.network=web"
+    depends_on:
+      - mysql
+    volumes:
+      - prestashop_data:/var/www/html
+    networks:
+      - web
+      - internal
+
+networks:
+  web:
+    external: true
+  internal:
+
+volumes:
+  mysql_data:
+  prestashop_data:
